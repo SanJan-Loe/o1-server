@@ -11,9 +11,33 @@ $NC = "`e[0m"
 
 # 定义 hosts 文件路径
 $HOSTS_FILE = "$env:SystemRoot\System32\drivers\etc\hosts"
+$BACKUP_DIR = "$env:SystemRoot\System32\drivers\etc"
 
 # 定义要查找的行
 $TARGET_LINE = "192.168.2.125 o1-server.gs.com"
+
+# 显示 Logo
+function Show-Logo {
+    Clear-Host
+    Write-Host @"
+$BLUE
+    ________  ____________    ____________________
+    _______  __    _______  _______ _________
+    (  ___  )/  \   (  ___  )(  ____ \\__   __/
+    | (   ) |\/) )  | (   ) || (    \/   ) (   
+    | |   | |  | |  | |   | || (_____    | |   
+    | |   | |  | |  | |   | |(_____  )   | |   
+    | |   | |  | |  | |   | |      ) |   | |   
+    | (___) |__) (_ | (___) |/\____) |   | |   
+    (_______)\____/ (_______)\_______)   )_( 
+    ________  ____________    ____________________
+                                        
+                                            
+    $NC o1-server 配置工具
+    $NC 作者: semon
+    $NC 版本: 1.0
+"@
+}
 
 # 检查管理员权限
 if (-not ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
@@ -22,6 +46,61 @@ if (-not ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdenti
     exit
 }
 
+# 备份 hosts 文件
+function Backup-HostsFile {
+    param (
+        [string]$BackupDir,
+        [string]$HostsFile
+    )
+    $BackupFile = Join-Path $BackupDir "hosts.backup_$(Get-Date -Format 'yyyyMMdd_HHmmss')"
+    try {
+        Copy-Item -Path $HostsFile -Destination $BackupFile -ErrorAction Stop
+        Write-Host "$GREEN[信息]$NC 已备份 hosts 文件到: $BackupFile"
+        return $BackupFile
+    }
+    catch {
+        Write-Host "$RED[错误]$NC 备份 hosts 文件失败: $_"
+        exit 1
+    }
+}
+
+# 列出所有备份文件
+function List-BackupFiles {
+    param (
+        [string]$BackupDir
+    )
+    $backupFiles = Get-ChildItem -Path $BackupDir -Filter "hosts.backup_*" | Sort-Object CreationTime -Descending
+    if ($backupFiles.Count -eq 0) {
+        Write-Host "$YELLOW[警告]$NC 未找到任何备份文件"
+        return $null
+    }
+
+    Write-Host "$BLUE[信息]$NC 可用备份文件列表："
+    for ($i = 0; $i -lt $backupFiles.Count; $i++) {
+        Write-Host "$($i + 1)) $($backupFiles[$i].Name) ($($backupFiles[$i].CreationTime))"
+    }
+    return $backupFiles
+}
+
+# 恢复指定备份文件
+function Restore-BackupFile {
+    param (
+        [string]$BackupFile,
+        [string]$HostsFile
+    )
+    try {
+        Copy-Item -Path $BackupFile -Destination $HostsFile -Force -ErrorAction Stop
+        Write-Host "$GREEN[信息]$NC 已恢复 hosts 文件: $BackupFile"
+    }
+    catch {
+        Write-Host "$RED[错误]$NC 恢复 hosts 文件失败: $_"
+        exit 1
+    }
+}
+
+# 主逻辑开始
+Show-Logo
+
 # 检查 hosts 文件是否存在
 if (-not (Test-Path $HOSTS_FILE)) {
     Write-Host "$RED[错误]$NC 未找到 hosts 文件: $HOSTS_FILE"
@@ -29,15 +108,7 @@ if (-not (Test-Path $HOSTS_FILE)) {
 }
 
 # 备份 hosts 文件
-$BACKUP_FILE = "$env:SystemRoot\System32\drivers\etc\hosts.backup_$(Get-Date -Format 'yyyyMMdd_HHmmss')"
-try {
-    Copy-Item -Path $HOSTS_FILE -Destination $BACKUP_FILE -ErrorAction Stop
-    Write-Host "$GREEN[信息]$NC 已备份 hosts 文件到: $BACKUP_FILE"
-}
-catch {
-    Write-Host "$RED[错误]$NC 备份 hosts 文件失败: $_"
-    exit 1
-}
+$BACKUP_FILE = Backup-HostsFile -BackupDir $BACKUP_DIR -HostsFile $HOSTS_FILE
 
 # 读取 hosts 文件内容
 try {
@@ -53,63 +124,84 @@ $lineExists = ($hostsContent -split "`n" | ForEach-Object { $_.Trim() }) -contai
 
 # 显示当前状态
 if ($lineExists) {
-    Write-Host "$GREEN[信息]$NC 已找到目标行: $TARGET_LINE"
+    Write-Host "$GREEN[信息]$NC o1-server 配置已存在: $TARGET_LINE"
 }
 else {
-    Write-Host "$YELLOW[信息]$NC 未找到目标行: $TARGET_LINE"
+    Write-Host "$YELLOW[信息]$NC o1-server 配置未写入: $TARGET_LINE"
 }
 
-# 提供操作选项
-Write-Host ""
-Write-Host "$YELLOW[操作选项]$NC"
-if ($lineExists) {
-    Write-Host "1) 删除目标行"
-} else {
-    Write-Host "1) 写入目标行"
-}
+# 主循环
+while ($true) {
+    # 提供操作选项
+    Write-Host ""
+    Write-Host "$YELLOW[操作选项]$NC"
+    if ($lineExists) {
+        Write-Host "1) 删除 o1-server 配置"
+    } else {
+        Write-Host "1) 写入 o1-server 配置"
+    }
+    Write-Host "2) 恢复指定备份"
+    Write-Host "3) 退出"
+    $choice = Read-Host "请输入选项 (3)"
 
-Write-Host "2) 退出"
-$choice = Read-Host "请输入选项 (2)"
-
-# 处理用户选择
-switch ($choice) {
-    1 {
-        try {
-            if ($lineExists) {
-                # 删除目标行并清理多余空行
-                $newContent = ($hostsContent -split "`n" | Where-Object { $_ -ne $TARGET_LINE }) -join "`n"
-                [System.IO.File]::WriteAllText($HOSTS_FILE, $newContent, [System.Text.Encoding]::UTF8)
-                Write-Host "$GREEN[信息]$NC 已删除目标行: $TARGET_LINE"
-            }
-            else {
-                # 写入目标行
-                Add-Content -Path $HOSTS_FILE -Value $TARGET_LINE -Encoding UTF8 -ErrorAction Stop
-                Write-Host "$GREEN[信息]$NC 已写入目标行: $TARGET_LINE"
-            }
-        }
-        catch {
-            Write-Host "$RED[错误]$NC 操作失败: $_"
-            # 恢复备份
+    switch ($choice) {
+        1 {
             try {
-                Copy-Item -Path $BACKUP_FILE -Destination $HOSTS_FILE -Force -ErrorAction Stop
-                Write-Host "$GREEN[信息]$NC 已恢复 hosts 文件"
+                if ($lineExists) {
+                    # 删除目标行并清理多余空行
+                    $newContent = ($hostsContent -split "`n" | Where-Object { $_.Trim() -ne $TARGET_LINE.Trim() }) -join "`n"
+                    [System.IO.File]::WriteAllText($HOSTS_FILE, $newContent, [System.Text.Encoding]::UTF8)
+                    Write-Host "$GREEN[信息]$NC 已删除 o1-server 配置: $TARGET_LINE"
+                }
+                else {
+                    # 写入目标行
+                    Add-Content -Path $HOSTS_FILE -Value $TARGET_LINE -Encoding UTF8 -ErrorAction Stop
+                    Write-Host "$GREEN[信息]$NC 已写入 o1-server 配置: $TARGET_LINE"
+                }
+                # 更新状态
+                $hostsContent = Get-Content $HOSTS_FILE -Raw
+                $lineExists = ($hostsContent -split "`n" | ForEach-Object { $_.Trim() }) -contains $TARGET_LINE.Trim()
             }
             catch {
-                Write-Host "$RED[错误]$NC 恢复 hosts 文件失败: $_"
+                Write-Host "$RED[错误]$NC 操作失败: $_"
+                # 恢复备份
+                Restore-BackupFile -BackupFile $BACKUP_FILE -HostsFile $HOSTS_FILE
             }
-            exit 1
+        }
+        2 {
+            # 列出备份文件并恢复
+            $backupFiles = List-BackupFiles -BackupDir $BACKUP_DIR
+            if ($backupFiles -ne $null) {
+                $selected = Read-Host "请选择要恢复的备份编号"
+                if ([int]$selected -ge 1 -and [int]$selected -le $backupFiles.Count) {
+                    $selectedBackup = $backupFiles[[int]$selected - 1].FullName
+                    Restore-BackupFile -BackupFile $selectedBackup -HostsFile $HOSTS_FILE
+                    # 更新状态
+                    $hostsContent = Get-Content $HOSTS_FILE -Raw
+                    $lineExists = ($hostsContent -split "`n" | ForEach-Object { $_.Trim() }) -contains $TARGET_LINE.Trim()
+                }
+                else {
+                    Write-Host "$RED[错误]$NC 无效的编号，取消恢复操作"
+                }
+            }
+        }
+        3 {
+            Write-Host "$GREEN[信息]$NC 退出脚本"
+            exit 0
+        }
+        default {
+            Write-Host "$RED[错误]$NC 无效选项，请重新选择"
         }
     }
-    2 {
-        Write-Host "$GREEN[信息]$NC 退出脚本"
-        exit 0
+
+    # 刷新页面
+    Show-Logo
+
+    # 显示当前状态
+    if ($lineExists) {
+        Write-Host "$GREEN[信息]$NC o1-server 配置已存在: $TARGET_LINE"
     }
-    default {
-        Write-Host "$RED[错误]$NC 无效选项，退出脚本"
-        exit 1
+    else {
+        Write-Host "$YELLOW[信息]$NC o1-server 配置未写入: $TARGET_LINE"
     }
 }
-
-Write-Host ""
-Read-Host "按回车键退出"
-exit 0
