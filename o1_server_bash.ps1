@@ -13,7 +13,7 @@ $NC = "`e[0m"
 $HOSTS_FILE = "$env:SystemRoot\System32\drivers\etc\hosts"
 
 # 定义要查找的行
-$TARGET_LINE = "192.168.2.125:4433 o1-server.gs.com"
+$TARGET_LINE = "192.168.2.125 o1-server.gs.com"
 
 # 检查管理员权限
 if (-not ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
@@ -48,8 +48,8 @@ catch {
     exit 1
 }
 
-# 判断是否存在目标行（精确匹配整行）
-$lineExists = $hostsContent -match "^\s*$([regex]::Escape($TARGET_LINE))\s*$"
+# 判断是否存在目标行（忽略前后空格并处理换行符）
+$lineExists = ($hostsContent -split "`n" | ForEach-Object { $_.Trim() }) -contains $TARGET_LINE.Trim()
 
 # 显示当前状态
 if ($lineExists) {
