@@ -2,12 +2,18 @@
 $OutputEncoding = [System.Text.Encoding]::UTF8
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 
-# 颜色定义
-$RED = "`e[31m"
-$GREEN = "`e[32m"
-$YELLOW = "`e[33m"
-$BLUE = "`e[34m"
-$NC = "`e[0m"
+# 强制启用ANSI转义支持（PowerShell 7.2+）
+if ($PSVersionTable.PSVersion.Major -ge 7) {
+    $PSStyle.OutputRendering = 'Ansi'  # [[1]][[8]]
+}
+
+# 颜色定义（修正转义字符）
+$ESC = [char]27
+$RED = "$ESC[31m"
+$GREEN = "$ESC[32m"
+$YELLOW = "$ESC[33m"
+$BLUE = "$ESC[37m"
+$NC = "$ESC[0m"
 
 # 定义 hosts 文件路径
 $HOSTS_FILE = "$env:SystemRoot\System32\drivers\etc\hosts"
@@ -20,7 +26,7 @@ $TARGET_LINE = "192.168.2.125 o1-server.gs.com"
 function Show-Logo {
     Clear-Host
     Write-Host @"
-$BLUE
+$YELLOW
     ________  ____________    ____________________
     _______  __    _______  _______ _________
     (  ___  )/  \   (  ___  )(  ____ \\__   __/
@@ -35,7 +41,7 @@ $BLUE
                                             
     $NC o1-server 配置工具
     $NC 作者: semon
-    $NC 版本: 1.0
+    $NC 版本: 1.1
 "@
 }
 
