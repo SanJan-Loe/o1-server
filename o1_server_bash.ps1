@@ -20,7 +20,7 @@ $HOSTS_FILE = "$env:SystemRoot\System32\drivers\etc\hosts"
 $BACKUP_DIR = "$env:SystemRoot\System32\drivers\etc"
 
 # 定义要查找的行
-$TARGET_LINE = "192.168.2.125 o1-server.gs.com"
+$TARGET_LINE = "10.11.0.151 one-dev.gs.com"
 
 # 显示 Logo
 function Show-Logo {
@@ -41,7 +41,7 @@ $YELLOW
                                             
     $NC o1-server 配置工具
     $NC 作者: semon
-    $NC 版本: 1.1
+    $NC 版本: 1.2
 "@
 }
 
